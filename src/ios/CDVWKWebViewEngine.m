@@ -126,6 +126,9 @@
         //Set default Server String
         self.CDV_LOCAL_SERVER = @"http://localhost:8080";
 
+        // add to keyWindow to ensure it is 'active'
+        [UIApplication.sharedApplication.keyWindow addSubview:self.engineWebView];
+
         self.frame = frame;
     }
     return self;
@@ -229,6 +232,8 @@
     configuration.userContentController = userContentController;
 
     // re-create WKWebView, since we need to update configuration
+    // remove from keyWindow before recreating
+    [self.engineWebView removeFromSuperview];
     WKWebView* wkWebView = [[WKWebView alloc] initWithFrame:self.frame configuration:configuration];
 
     #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
@@ -239,6 +244,9 @@
 
     wkWebView.UIDelegate = self.uiDelegate;
     self.engineWebView = wkWebView;
+
+    // add to keyWindow to ensure it is 'active'
+    [UIApplication.sharedApplication.keyWindow addSubview:self.engineWebView];
 
     if (IsAtLeastiOSVersion(@"9.0") && [self.viewController isKindOfClass:[CDVViewController class]]) {
         wkWebView.customUserAgent = ((CDVViewController*) self.viewController).userAgent;
@@ -260,6 +268,10 @@
 
     if (![settings cordovaBoolSettingForKey:@"KeyboardDisplayRequiresUserAction" defaultValue:YES]) {
         [self keyboardDisplayDoesNotRequireUserAction];
+    }
+
+    if ([settings cordovaBoolSettingForKey:@"KeyboardAppearanceDark" defaultValue:NO] == YES) {
+        [self setKeyboardAppearanceDark];
     }
 
     [self updateSettings:settings];
@@ -287,6 +299,22 @@
     		((void (*)(id, SEL, void*, BOOL, BOOL, id))originalImp)(me, sel, arg0, TRUE, arg2, arg3);
   	});
   	method_setImplementation(method, imp);
+}
+
+- (void)setKeyboardAppearanceDark
+{
+    IMP darkImp = imp_implementationWithBlock(^(id _s) {
+        return UIKeyboardAppearanceDark;
+    });
+    for (NSString* classString in @[@"WKContentView", @"UITextInputTraits"]) {
+        Class c = NSClassFromString(classString);
+        Method m = class_getInstanceMethod(c, @selector(keyboardAppearance));
+        if (m != NULL) {
+            method_setImplementation(m, darkImp);
+        } else {
+            class_addMethod(c, @selector(keyboardAppearance), darkImp, "l@:");
+        }
+    }
 }
 
 - (void)onReset
