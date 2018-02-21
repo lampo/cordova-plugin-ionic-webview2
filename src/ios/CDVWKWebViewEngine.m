@@ -28,7 +28,6 @@
 #import "GCDWebServer.h"
 #import "GCDWebServerPrivate.h"
 
-#define CDV_LOCAL_SERVER @"http://localhost:8080"
 #define CDV_BRIDGE_NAME @"cordova"
 #define CDV_IONIC_STOP_SCROLL @"stopScroll"
 
@@ -102,6 +101,14 @@
 @property (nonatomic, weak) id <WKScriptMessageHandler> weakScriptMessageHandler;
 @property (nonatomic, strong) GCDWebServer *webServer;
 @property (nonatomic, readwrite) CGRect frame;
+@property (nonatomic, readwrite) NSString *CDV_LOCAL_SERVER;
+
+@end
+
+// expose private configuration value required for background operation
+@interface WKWebViewConfiguration ()
+
+@property (setter=_setAlwaysRunsAtForegroundPriority:, nonatomic) bool _alwaysRunsAtForegroundPriority;
 
 @end
 
@@ -122,19 +129,45 @@
         if(!IsAtLeastiOSVersion(@"9.0")) {
             return nil;
         }
-        self.frame = frame;
-        [GCDWebServer setLogLevel: kGCDWebServerLoggingLevel_Warning];
-        self.webServer = [[GCDWebServer alloc] init];
-        [self.webServer addGETHandlerForBasePath:@"/" directoryPath:@"/" indexFilename:nil cacheAge:3600 allowRangeRequests:YES];
-        NSDictionary *options = @{
-                                  GCDWebServerOption_Port: @(8080),
-                                  GCDWebServerOption_BindToLocalhost: @(YES),
-                                  GCDWebServerOption_ServerName: @"Ionic"
-                                  };
-        [self.webServer startWithOptions:options error:nil];
-    }
 
+        //Set default Server String
+        self.CDV_LOCAL_SERVER = @"http://localhost:8080";
+
+        // add to keyWindow to ensure it is 'active'
+        [UIApplication.sharedApplication.keyWindow addSubview:self.engineWebView];
+
+        self.frame = frame;
+    }
     return self;
+}
+
+- (void)initWebServer:(NSDictionary*)settings
+{
+    [GCDWebServer setLogLevel: kGCDWebServerLoggingLevel_Warning];
+    self.webServer = [[GCDWebServer alloc] init];
+    [self.webServer addGETHandlerForBasePath:@"/" directoryPath:@"/" indexFilename:nil cacheAge:3600 allowRangeRequests:YES];
+    
+    BOOL suspendInBackground = YES;
+    int waitTime = 10;
+    int portNumber = [settings cordovaFloatSettingForKey:@"WKPort" defaultValue:8080];
+    if(portNumber != 8080){
+        self.CDV_LOCAL_SERVER = [NSString stringWithFormat:@"http://localhost:%d", portNumber];
+    }
+    
+    if ([settings cordovaBoolSettingForKey:@"WKEnableBackground" defaultValue:NO]) {
+        suspendInBackground = NO;
+        waitTime = 60;
+    }
+    
+    NSDictionary *options = @{
+                              GCDWebServerOption_AutomaticallySuspendInBackground: @(suspendInBackground),
+                              GCDWebServerOption_ConnectedStateCoalescingInterval: @(waitTime),
+                              GCDWebServerOption_Port: @(portNumber),
+                              GCDWebServerOption_BindToLocalhost: @(YES),
+                              GCDWebServerOption_ServerName: @"Ionic"
+                              };
+    
+    [self.webServer startWithOptions:options error:nil];
 }
 
 - (WKWebViewConfiguration*) createConfigurationFromSettings:(NSDictionary*)settings
@@ -154,6 +187,8 @@
     if (settings == nil) {
         return configuration;
     }
+    //required to stop wkwebview suspending in background too eagerly (as used in background mode plugin)
+    configuration._alwaysRunsAtForegroundPriority = [settings cordovaBoolSettingForKey:@"WKEnableBackground" defaultValue:NO];
     configuration.allowsInlineMediaPlayback = [settings cordovaBoolSettingForKey:@"AllowInlineMediaPlayback" defaultValue:YES];
     configuration.suppressesIncrementalRendering = [settings cordovaBoolSettingForKey:@"SuppressesIncrementalRendering" defaultValue:NO];
     configuration.allowsAirPlayForMediaPlayback = [settings cordovaBoolSettingForKey:@"MediaPlaybackAllowsAirPlay" defaultValue:YES];
@@ -164,6 +199,7 @@
 {
     // viewController would be available now. we attempt to set all possible delegates to it, by default
     NSDictionary* settings = self.commandDelegate.settings;
+    [self initWebServer:settings];
 
     self.uiDelegate = [[CDVWKWebViewUIDelegate alloc] initWithTitle:[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"]];
 
@@ -205,6 +241,8 @@
     configuration.userContentController = userContentController;
 
     // re-create WKWebView, since we need to update configuration
+    // remove from keyWindow before recreating
+    [self.engineWebView removeFromSuperview];
     WKWebView* wkWebView = [[WKWebView alloc] initWithFrame:self.frame configuration:configuration];
 
     #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
@@ -215,6 +253,9 @@
 
     wkWebView.UIDelegate = self.uiDelegate;
     self.engineWebView = wkWebView;
+
+    // add to keyWindow to ensure it is 'active'
+    [UIApplication.sharedApplication.keyWindow addSubview:self.engineWebView];
 
     if (IsAtLeastiOSVersion(@"9.0") && [self.viewController isKindOfClass:[CDVViewController class]]) {
         wkWebView.customUserAgent = ((CDVViewController*) self.viewController).userAgent;
@@ -236,6 +277,10 @@
 
     if (![settings cordovaBoolSettingForKey:@"KeyboardDisplayRequiresUserAction" defaultValue:YES]) {
         [self keyboardDisplayDoesNotRequireUserAction];
+    }
+
+    if ([settings cordovaBoolSettingForKey:@"KeyboardAppearanceDark" defaultValue:NO] == YES) {
+        [self setKeyboardAppearanceDark];
     }
 
     [self updateSettings:settings];
@@ -263,6 +308,22 @@
     		((void (*)(id, SEL, void*, BOOL, BOOL, id))originalImp)(me, sel, arg0, TRUE, arg2, arg3);
   	});
   	method_setImplementation(method, imp);
+}
+
+- (void)setKeyboardAppearanceDark
+{
+    IMP darkImp = imp_implementationWithBlock(^(id _s) {
+        return UIKeyboardAppearanceDark;
+    });
+    for (NSString* classString in @[@"WKContentView", @"UITextInputTraits"]) {
+        Class c = NSClassFromString(classString);
+        Method m = class_getInstanceMethod(c, @selector(keyboardAppearance));
+        if (m != NULL) {
+            method_setImplementation(m, darkImp);
+        } else {
+            class_addMethod(c, @selector(keyboardAppearance), darkImp, "l@:");
+        }
+    }
 }
 
 - (void)onReset
@@ -325,7 +386,7 @@ static void * KVOContext = &KVOContext;
 - (id)loadRequest:(NSURLRequest *)request
 {
     if (request.URL.fileURL) {
-        NSURL *url = [[NSURL URLWithString:CDV_LOCAL_SERVER] URLByAppendingPathComponent:request.URL.path];
+        NSURL *url = [[NSURL URLWithString:self.CDV_LOCAL_SERVER] URLByAppendingPathComponent:request.URL.path];
         if(request.URL.query) {
             url = [NSURL URLWithString:[@"?" stringByAppendingString:request.URL.query] relativeToURL:url];
         }
@@ -478,7 +539,7 @@ static void * KVOContext = &KVOContext;
         return nil;
     }
     NSLog(@"CDVWKWebViewEngine: auto injecting cordova");
-    NSString *cordovaPath = [CDV_LOCAL_SERVER stringByAppendingString:cordovaURL.URLByDeletingLastPathComponent.path];
+    NSString *cordovaPath = [self.CDV_LOCAL_SERVER stringByAppendingString:cordovaURL.URLByDeletingLastPathComponent.path];
     NSString *replacement = [NSString stringWithFormat:@"var pathPrefix = '%@/';", cordovaPath];
     source = [source stringByReplacingOccurrencesOfString:@"var pathPrefix = findCordovaPath();" withString:replacement];
 
