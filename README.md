@@ -59,7 +59,7 @@ ionic cordova prepare               # re-install plugins compatible with cordova
 Install the WKWebViewPlugin:
 
 ```
-ionic cordova plugin add cordova-plugin-ionic-webview --save
+ionic cordova plugin add https://github.com/ghenry22/cordova-plugin-ionic-webview --save
 ```
 
 **Note:**
@@ -84,6 +84,8 @@ ionic cordova run ios
 ```
 
 
+
+
 Required Permissions
 -------------------
 WKWebView may not fully launch (the deviceready event may not fire) unless if the following is included in config.xml:
@@ -97,17 +99,40 @@ WKWebView may not fully launch (the deviceready event may not fire) unless if th
 <preference name="CordovaWebViewEngine" value="CDVWKWebViewEngine" />
 ```
 
+New Settings in this Fork
+-------------------
+This fork introduces some new capabilities which can be configured in your config.xml.
+
+Set the keyboard appearance to use a dark style (default is false)
+```
+<preference name="KeyboardAppearanceDark" value="true" />
+```
+
+Set the port that the built in webserver will listen on (default is 8080)
+If you change the port be sure to also update your allow-navigation href statement to match as mentioned in Required Permissions section above.
+```
+<preference name="WKPort" value="8534" />
+```
+
+Enable wkwebview to run in the background (default is false)
+When enabled wkwebview will continue to run in background until the OS suspends it.  You still need a valid reason to be running in the background (like audio or geolocation) this does not "spoof" anything for you just allows the wkwebview to continue processing javascript when in the background until suspended by the OS.  This makes the behaviour in line with the older UIWebview.
+```
+<preference name="WKEnableBackground" value="true" />
+```
+
 Application Transport Security (ATS) in iOS 9
 -----------
 
-The next released version of the [cordova-cli 5.4.0](https://www.npmjs.com/package/cordova) will support automatic conversion of the [&lt;access&gt;](http://cordova.apache.org/docs/en/edge/guide/appdev/whitelist/index.html) tags in config.xml to Application Transport Security [ATS](https://developer.apple.com/library/prerelease/ios/documentation/General/Reference/InfoPlistKeyReference/Articles/CocoaKeys.html#//apple_ref/doc/uid/TP40009251-SW33) directives. Upgrade to the version 5.4.0 to use this new functionality.
+Cordova CLI 5.4.0 onwards supports automatic conversion of the tags in config.xml to ATS.  This should no longer be an issue at this time.
 
 Apple Issues
 -------
 
-The `AllowInlineMediaPlayback` preference will not work because of this [Apple bug](http://openradar.appspot.com/radar?id=6673091526656000). This bug [has been fixed](https://issues.apache.org/jira/browse/CB-11452) in [iOS 10](https://twitter.com/shazron/status/745546355796389889).
+The `AllowInlineMediaPlayback` preference will not work on OS versions prior to iOS 10.
 
 Limitations
 --------
 
 There are several [known issues](https://issues.apache.org/jira/issues/?jql=project%20%3D%20CB%20AND%20labels%20%3D%20wkwebview-known-issues) with the official Cordova WKWebView plugin. The Ionic team thinks we have resolved several of the major issues. Please [let us know](https://github.com/driftyco/cordova-plugin-wkwebview-engine/issues) if something isn't working as expected.
+
+This fork contains further fixes for numerous issues that I have come across.  I will be doing my best to actively maintain this plugin and test and merge in any suggested fixes or PR's contrinbuted by the community.  Hopefully this can provide a faster moving repository for the wkwebview work that the ionic team started.
