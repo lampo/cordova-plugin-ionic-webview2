@@ -19,17 +19,19 @@
   under the License.
 -->
 
-<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:rim="http://www.blackberry.com/ns/widgets" xmlns:android="http://schemas.android.com/apk/res/android" id="cordova-plugin-ionic-webview" version="1.1.17dev">
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" 
+    xmlns:rim="http://www.blackberry.com/ns/widgets" 
+    xmlns:android="http://schemas.android.com/apk/res/android" id="cordova-plugin-ionic-webview-lampo" version="1.1.18">
     <name>cordova-plugin-ionic-webview</name>
     <description>The official Ionic's WKWebView Engine Plugin</description>
     <license>Apache-2.0</license>
     <keywords>cordova,wkwebview</keywords>
-    <repo>https://github.com/ionic-team/cordova-plugin-ionic-webview</repo>
+    <repo>https://github.com/lampo/cordova-plugin-ionic-webview2</repo>
 
-	<engines>
+    <engines>
         <engine name="cordova-ios" version=">=4.0.0-dev"/>
         <engine name="apple-ios" version=">=9.0"/>
-	</engines>
+    </engines>
 
     <!-- ios -->
     <platform name="ios">
@@ -91,6 +93,6 @@
         <framework src="libz.tbd"/>
 
     </platform>
-    <issue>https://github.com/ionic-team/cordova-plugin-ionic-webview/issues</issue>
+    <issue>https://github.com/lampo/cordova-plugin-ionic-webview2/issues</issue>
     <author>Ionic Team</author>
 </plugin>
